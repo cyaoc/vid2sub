@@ -8,7 +8,8 @@
 
 Whisper.cpp是OpenAI开源项目Whisper的CPP实现，可以在没有显卡的PC上以较快的速度实现语音转文字。也是本项目的的核心。
 
-如果想要自己编译，请按照Whisper.cpp的说明进行编译以及模型的转换。
+非整合包用户，请按照Whisper.cpp的说明进行编译以及模型的转换，并将编译的exe放入bin\cpu 或者 bin\openvino 目录，模型文件放入models目录，当前中支持medium和large-v3。
+
 
 # 视频转音频
 [FFmpeg](https://github.com/FFmpeg/FFmpeg)
