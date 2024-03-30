@@ -195,10 +195,10 @@ func input() (*inputs, error) {
 	return &inputs{filepath, models[selected], language, useOpenVINO}, nil
 }
 
-func printOutput(r io.Reader, outputType string) error {
+func printOutput(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		fmt.Printf("%s: %s\n", outputType, scanner.Text())
+		fmt.Printf("%s\n", scanner.Text())
 	}
 	return scanner.Err()
 }
@@ -219,10 +219,10 @@ func runCommand(command string, args ...string) error {
 	}
 	errChan := make(chan error, 2)
 	go func() {
-		errChan <- printOutput(stdoutPipe, "stdout")
+		errChan <- printOutput(stdoutPipe)
 	}()
 	go func() {
-		errChan <- printOutput(stderrPipe, "stderr")
+		errChan <- printOutput(stderrPipe)
 	}()
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("command finished with error: %w", err)
@@ -242,7 +242,7 @@ func main() {
 		return
 	}
 
-	rootDir, err := GetRootDirectory(false)
+	rootDir, err := GetRootDirectory(true)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
@@ -304,10 +304,10 @@ func main() {
 		index++
 		newName = fmt.Sprintf("%s(%d)%s", fileNameWithoutExtension, index, extension)
 	}
-
-	if err := os.Rename(wavFileAddress+extension, filepath.Join(dirs["outputs"], newName)); err != nil {
+	outputAddress := filepath.Join(dirs["outputs"], newName)
+	if err := os.Rename(wavFileAddress+extension, outputAddress); err != nil {
 		fmt.Println("Failed to move and rename VTT file:", err)
 		return
 	}
-
+	fmt.Println("VTT file moved and renamed to ", outputAddress)
 }
