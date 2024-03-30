@@ -2,117 +2,89 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
+	"strings"
+	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/cheggaaa/pb/v3"
+	"github.com/charmbracelet/bubbles/key"
+	inf "github.com/fzdwx/infinite"
+	"github.com/fzdwx/infinite/components"
+	"github.com/fzdwx/infinite/components/input/confirm"
+	"github.com/fzdwx/infinite/components/input/text"
+	"github.com/fzdwx/infinite/components/progress"
+	"github.com/fzdwx/infinite/components/selection/singleselect"
+	"github.com/fzdwx/infinite/theme"
 	"github.com/klauspost/cpuid/v2"
 )
 
-func ensureDirExists(dirPath string) (bool, error) {
-	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-		err := os.MkdirAll(dirPath, 0755)
-		if err != nil {
-			return false, fmt.Errorf("failed to create directory %s: %v", dirPath, err)
-		}
-		return true, nil
-	} else if err != nil {
-		return false, fmt.Errorf("error checking directory %s: %v", dirPath, err)
-	}
-	return true, nil
-}
-
-func downloadFile(url, filename string, wg *sync.WaitGroup, ch chan<- string) {
-	defer wg.Done()
-
-	resp, err := http.Get(url)
-	if err != nil {
-		ch <- fmt.Sprintf("Failed to download %s: %v", url, err)
-		return
-	}
-	defer resp.Body.Close()
-
-	out, err := os.Create(filename)
-	if err != nil {
-		ch <- fmt.Sprintf("Failed to create %s: %v", filename, err)
-		return
-	}
-	defer out.Close()
-
-	totalSize := resp.ContentLength
-	bar := pb.Full.Start64(totalSize)
-	bar.Set(pb.Bytes, true)
-
-	proxyReader := bar.NewProxyReader(resp.Body)
-
-	_, err = io.Copy(out, proxyReader)
-	if err != nil {
-		ch <- fmt.Sprintf("Failed to write %s: %v", filename, err)
-		return
-	}
-	bar.Finish()
-	ch <- fmt.Sprintf("Downloaded %s to %s successfully", url, filename)
-}
-
-func checkAndDownload(model string, useOpenVINO bool) {
-	modelsDir := filepath.Join(".", "models")
-	if ok, err := ensureDirExists(modelsDir); !ok {
-		fmt.Println("Error:", err)
-	} else {
-		fmt.Println("Directory ensured:", modelsDir)
-		filesToDownload := map[string]string{
-			fmt.Sprintf("ggml-%s.bin", model): fmt.Sprintf("%s/ggml-%s.bin", modelsDir, model),
-		}
-
-		if useOpenVINO {
-			filesToDownload[fmt.Sprintf("ggml-%s-encoder-openvino.xml", model)] = fmt.Sprintf("%s/ggml-%s-encoder-openvino.xml", modelsDir, model)
-			filesToDownload[fmt.Sprintf("ggml-%s-encoder-openvino.bin", model)] = fmt.Sprintf("%s/ggml-%s-encoder-openvino.bin", modelsDir, model)
-		}
-
-		var wg sync.WaitGroup
-		ch := make(chan string, len(filesToDownload))
-
-		for file, path := range filesToDownload {
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				wg.Add(1)
-				url := fmt.Sprintf("https://huggingface.co/cyaoc/whisper-ggml/resolve/main/models/%s", file)
-				go downloadFile(url, path, &wg, ch)
-			} else {
-				fmt.Printf("%s already exists\n", path)
+func ensureDirsExist(dirPaths ...string) error {
+	for _, dirPath := range dirPaths {
+		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+			if err := os.MkdirAll(dirPath, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %v", dirPath, err)
 			}
-		}
-
-		go func() {
-			wg.Wait()
-			close(ch)
-		}()
-
-		for msg := range ch {
-			fmt.Println(msg)
+		} else if err != nil {
+			return fmt.Errorf("error checking directory %s: %v", dirPath, err)
 		}
 	}
+	return nil
 }
 
-func IsIntelCPU() bool {
+func isIntelCPU() bool {
 	return cpuid.CPU.VendorID == cpuid.Intel
 }
 
-func GetRootDirectory() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
+func GetRootDirectory(isRelease bool) (string, error) {
+	if isRelease {
+		exePath, err := os.Executable()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Dir(exePath), nil
 	}
-	return dir, nil
+	return os.Getwd()
 }
 
-func runWhisper() {
-	rootDir, _ := GetRootDirectory()
-	intelOpenVinoDir := filepath.Join(rootDir, "bin", "openvino")
+func checkAndDownload(filesToDownload map[string]string) {
+	var needToDownload []string
+	for key, path := range filesToDownload {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			needToDownload = append(needToDownload, key)
+		}
+	}
+	if len(needToDownload) > 0 {
+		progress.NewGroupWithCount(len(needToDownload)).AppendRunner(func(pro *components.Progress) func() {
+			fileName := needToDownload[pro.Id-1]
+			fmt.Println("Downloading", fileName)
+			url := fmt.Sprintf("https://huggingface.co/cyaoc/whisper-ggml/resolve/main/models/%s", fileName)
+			resp, err := http.Get(url)
+			if err != nil {
+				pro.Println("get error", err)
+				return func() {}
+			}
+			defer resp.Body.Close()
+			pro.WithTotal(resp.ContentLength)
+			return func() {
+				dest, err := os.OpenFile(filesToDownload[fileName], os.O_CREATE|os.O_WRONLY, 0o777)
+				if err != nil {
+					pro.Println("dest open error", err)
+					return
+				}
+				defer dest.Close()
+
+				_, err = progress.StartTransfer(resp.Body, dest, pro)
+				if err != nil {
+					pro.Println("trans error", err)
+				}
+			}
+		}).Display()
+	}
+}
+
+func setOpenVINOEnv(intelOpenVinoDir string) {
 	openVinoDir := filepath.Join(intelOpenVinoDir, "runtime", "cmake")
 	openVinoLibPaths := filepath.Join(intelOpenVinoDir, "runtime", "bin", "intel64", "Release") + ";" +
 		filepath.Join(intelOpenVinoDir, "runtime", "bin", "intel64", "Debug")
@@ -150,132 +122,158 @@ func runWhisper() {
 	os.Setenv("PATH", openVinoLibPaths+";"+os.Getenv("PATH"))
 
 	fmt.Println("[setupvars] OpenVINO environment initialized")
+}
 
-	cmd := exec.Command(filepath.Join(intelOpenVinoDir, "main.exe"), "-h")
-	cmd.Env = os.Environ()
-	output, err := cmd.CombinedOutput()
+type inputs struct {
+	filepath, model, language string
+	useOpenVINO               bool
+}
+
+func input() (*inputs, error) {
+	filepath, err := inf.NewText(
+		text.WithPrompt("Enter file path or drag and drop the file."),
+		text.WithPromptStyle(theme.DefaultTheme.PromptStyle),
+		text.WithRequired(),
+	).Display()
 	if err != nil {
-		fmt.Printf("Error running main.exe: %v\n", err)
+		return nil, err
 	}
-	fmt.Printf("Output of main.exe:\n%s\n", output)
+	options := []string{
+		"Performance: For best quality with large model, but slower.",
+		"Speed: For faster processing with medium model.",
+	}
+	models := []string{
+		"large-v3",
+		"medium",
+	}
+	selectKeymap := singleselect.DefaultSingleKeyMap()
+	selectKeymap.Confirm = key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "finish select"),
+	)
+	selectKeymap.Choice = key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "finish select"),
+	)
+	selectKeymap.NextPage = key.NewBinding(
+		key.WithKeys("right"),
+		key.WithHelp("->", "next page"),
+	)
+	selectKeymap.PrevPage = key.NewBinding(
+		key.WithKeys("left"),
+		key.WithHelp("<-", "prev page"),
+	)
+	selected, err := inf.NewSingleSelect(
+		options,
+		singleselect.WithDisableFilter(),
+		singleselect.WithKeyBinding(selectKeymap),
+		singleselect.WithPageSize(2),
+	).Display("Priority")
+	if err != nil {
+		return nil, err
+	}
+	language, err := inf.NewText(
+		text.WithPrompt("Enter language code (e.g., 'en', 'ja', 'zh'). "),
+		text.WithDefaultValue("auto"),
+		text.WithPromptStyle(theme.DefaultTheme.PromptStyle),
+	).Display()
+	if err != nil {
+		return nil, err
+	}
+	var useOpenVINO = false
+	if isIntelCPU() {
+		useOpenVINO, err = inf.NewConfirm(
+			confirm.WithPrompt("Intel CPU detected. Enable OpenVINO?"),
+			confirm.WithDefaultYes(),
+		).Display()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &inputs{filepath, models[selected], language, useOpenVINO}, nil
 }
 
-type model struct {
-	step        int
-	filePath    string
-	priority    string
-	language    string
-	useOpenVINO bool
+func runCommand(command string, args ...string) ([]byte, error) {
+	cmd := exec.Command(command, args...)
+	cmd.Env = os.Environ()
+	return cmd.CombinedOutput()
 }
-
-type filePathMsg string
-type priorityMsg string
-type languageMsg string
-type useOpenVINOMsg bool
 
 func main() {
-	p := tea.NewProgram(initialModel())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error: %v", err)
-		os.Exit(1)
+	inputs, err := input()
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
 	}
-}
 
-func initialModel() model {
-	return model{}
-}
+	rootDir, err := GetRootDirectory(false)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	dirs := map[string]string{
+		"bin":      filepath.Join(rootDir, "bin"),
+		"openvino": filepath.Join(rootDir, "bin", "openvino"),
+		"models":   filepath.Join(rootDir, "models"),
+		"tmp":      filepath.Join(rootDir, "tmp"),
+		"outputs":  filepath.Join(rootDir, "outputs"),
+	}
+	if err := ensureDirsExist(dirs["models"], dirs["tmp"], dirs["outputs"]); err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fileName := filepath.Base(inputs.filepath)
+	fileNameWithoutExtension := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 
-func (m model) Init() tea.Cmd {
-	return nil
-}
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		fmt.Println("ffmpeg not found in system path, using local version.")
+		ffmpegPath = filepath.Join(rootDir, "bin", "ffmpeg")
+	}
+	wavFileAddress := filepath.Join(dirs["tmp"], fileNameWithoutExtension+time.Now().Format("2006-01-02_15-04-05")+".wav")
+	output, err := runCommand(ffmpegPath, "-y", "-i", inputs.filepath, "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", "-vn", wavFileAddress)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Printf("Output of main.exe:\n%s\n", output)
+	defer os.Remove(wavFileAddress)
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
+	subType := "vtt"
+	filesToDownload := map[string]string{
+		fmt.Sprintf("ggml-%s.bin", inputs.model): fmt.Sprintf("%s/ggml-%s.bin", dirs["models"], inputs.model),
+	}
+	whisperPath := filepath.Join(dirs["bin"], "main")
+	if inputs.useOpenVINO {
+		filesToDownload[fmt.Sprintf("ggml-%s-encoder-openvino.xml", inputs.model)] = fmt.Sprintf("%s/ggml-%s-encoder-openvino.xml", dirs["models"], inputs.model)
+		filesToDownload[fmt.Sprintf("ggml-%s-encoder-openvino.bin", inputs.model)] = fmt.Sprintf("%s/ggml-%s-encoder-openvino.bin", dirs["models"], inputs.model)
+		setOpenVINOEnv(dirs["openvino"])
+		whisperPath = filepath.Join(dirs["openvino"], "main")
+	}
+	checkAndDownload(filesToDownload)
 
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
+	output, err = runCommand(whisperPath, "-m", filesToDownload[fmt.Sprintf("ggml-%s.bin", inputs.model)], "-l", inputs.language, "-f", wavFileAddress, fmt.Sprintf("-o%s", subType))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	fmt.Printf("Output of whisper:\n%s\n", output)
+
+	index := 0
+	extension := "." + subType
+	newName := fileNameWithoutExtension + extension
+	for {
+		_, err := os.Stat(filepath.Join(dirs["outputs"], newName))
+		if os.IsNotExist(err) {
+			break
 		}
-
-	case filePathMsg:
-		m.filePath = string(msg)
-		m.step++
-		return m, nil
-
-	case priorityMsg:
-		m.priority = string(msg)
-		m.step++
-		return m, nil
-
-	case languageMsg:
-		m.language = string(msg)
-		m.step++
-		return m, nil
-
-	case useOpenVINOMsg:
-		m.useOpenVINO = bool(msg)
-		m.step++
-		return m, nil
+		index++
+		newName = fmt.Sprintf("%s(%d)%s", fileNameWithoutExtension, index, extension)
 	}
 
-	switch m.step {
-	case 0:
-		return m, askForFilePath()
-	case 1:
-		return m, askForPriority()
-	case 2:
-		return m, askForLanguage()
-	case 3:
-		return m, askForOpenVINO()
-	case 4:
-		fmt.Println("Configuration Complete:")
-		fmt.Printf("File Path: %s\n", m.filePath)
-		fmt.Printf("Priority: %s\n", m.priority)
-		fmt.Printf("Language: %s\n", m.language)
-		fmt.Printf("Use OpenVINO: %t\n", m.useOpenVINO)
-		return m, tea.Quit
+	if err := os.Rename(wavFileAddress+extension, filepath.Join(dirs["outputs"], newName)); err != nil {
+		fmt.Println("Failed to move and rename VTT file:", err)
+		return
 	}
 
-	return m, nil
-}
-
-func (m model) View() string {
-	switch m.step {
-	case 0:
-		return "Enter file path or drag and drop the file:\n"
-	case 1:
-		return "Choose a priority: [Speed, Performance]\n"
-	case 2:
-		return "Enter language code (e.g., 'en', 'ja', 'zh') or leave blank for 'auto':\n"
-	case 3:
-		return "Enable OpenVINO acceleration? [y/n]:\n"
-	default:
-		return "Thank you!\n"
-	}
-}
-
-// Dummy functions to simulate asking questions. In a real application, you would replace these with actual bubbletea commands to prompt the user for input.
-func askForFilePath() tea.Cmd {
-	return func() tea.Msg {
-		return filePathMsg("/path/to/file.mp4")
-	}
-}
-
-func askForPriority() tea.Cmd {
-	return func() tea.Msg {
-		return priorityMsg("Speed")
-	}
-}
-
-func askForLanguage() tea.Cmd {
-	return func() tea.Msg {
-		return languageMsg("en")
-	}
-}
-
-func askForOpenVINO() tea.Cmd {
-	return func() tea.Msg {
-		return useOpenVINOMsg(true)
-	}
 }
