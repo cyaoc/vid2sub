@@ -12,9 +12,9 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	inf "github.com/fzdwx/infinite"
 	"github.com/fzdwx/infinite/components"
-	"github.com/fzdwx/infinite/components/input/confirm"
 	"github.com/fzdwx/infinite/components/input/text"
 	"github.com/fzdwx/infinite/components/progress"
+	"github.com/fzdwx/infinite/components/selection/confirm"
 	"github.com/fzdwx/infinite/components/selection/singleselect"
 	"github.com/fzdwx/infinite/theme"
 	"github.com/klauspost/cpuid/v2"
@@ -58,26 +58,26 @@ func checkAndDownload(filesToDownload map[string]string) {
 	if len(needToDownload) > 0 {
 		progress.NewGroupWithCount(len(needToDownload)).AppendRunner(func(pro *components.Progress) func() {
 			fileName := needToDownload[pro.Id-1]
-			fmt.Println("Downloading", fileName)
+			fmt.Println("Downloading:", fileName)
 			url := fmt.Sprintf("https://huggingface.co/cyaoc/whisper-ggml/resolve/main/models/%s", fileName)
 			resp, err := http.Get(url)
 			if err != nil {
-				pro.Println("get error", err)
+				pro.Println("get error:", err)
 				return func() {}
 			}
-			defer resp.Body.Close()
 			pro.WithTotal(resp.ContentLength)
 			return func() {
+				defer resp.Body.Close()
 				dest, err := os.OpenFile(filesToDownload[fileName], os.O_CREATE|os.O_WRONLY, 0o777)
 				if err != nil {
-					pro.Println("dest open error", err)
+					pro.Println("dest open error:", err)
 					return
 				}
 				defer dest.Close()
 
 				_, err = progress.StartTransfer(resp.Body, dest, pro)
 				if err != nil {
-					pro.Println("trans error", err)
+					pro.Println("trans error:", err)
 				}
 			}
 		}).Display()
@@ -182,7 +182,7 @@ func input() (*inputs, error) {
 	}
 	var useOpenVINO = false
 	if isIntelCPU() {
-		useOpenVINO, err = inf.NewConfirm(
+		useOpenVINO, err = inf.NewConfirmWithSelection(
 			confirm.WithPrompt("Intel CPU detected. Enable OpenVINO?"),
 			confirm.WithDefaultYes(),
 		).Display()
@@ -236,7 +236,7 @@ func main() {
 		fmt.Println("Error:", err)
 		return
 	}
-	fmt.Printf("Output of main.exe:\n%s\n", output)
+	fmt.Printf("Output of ffmpeg:\n%s\n", output)
 	defer os.Remove(wavFileAddress)
 
 	subType := "vtt"
