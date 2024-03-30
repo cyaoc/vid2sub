@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -193,10 +195,44 @@ func input() (*inputs, error) {
 	return &inputs{filepath, models[selected], language, useOpenVINO}, nil
 }
 
-func runCommand(command string, args ...string) ([]byte, error) {
+func printOutput(r io.Reader, outputType string) error {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		fmt.Printf("%s: %s\n", outputType, scanner.Text())
+	}
+	return scanner.Err()
+}
+
+func runCommand(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
 	cmd.Env = os.Environ()
-	return cmd.CombinedOutput()
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("error creating stdout pipe: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("error creating stderr pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("error starting command: %w", err)
+	}
+	errChan := make(chan error, 2)
+	go func() {
+		errChan <- printOutput(stdoutPipe, "stdout")
+	}()
+	go func() {
+		errChan <- printOutput(stderrPipe, "stderr")
+	}()
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("command finished with error: %w", err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := <-errChan; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func main() {
@@ -231,12 +267,11 @@ func main() {
 		ffmpegPath = filepath.Join(rootDir, "bin", "ffmpeg")
 	}
 	wavFileAddress := filepath.Join(dirs["tmp"], fileNameWithoutExtension+time.Now().Format("2006-01-02_15-04-05")+".wav")
-	output, err := runCommand(ffmpegPath, "-y", "-i", inputs.filepath, "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", "-vn", wavFileAddress)
+	err = runCommand(ffmpegPath, "-y", "-i", inputs.filepath, "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", "-vn", wavFileAddress)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
-	fmt.Printf("Output of ffmpeg:\n%s\n", output)
 	defer os.Remove(wavFileAddress)
 
 	subType := "vtt"
@@ -252,12 +287,11 @@ func main() {
 	}
 	checkAndDownload(filesToDownload)
 
-	output, err = runCommand(whisperPath, "-m", filesToDownload[fmt.Sprintf("ggml-%s.bin", inputs.model)], "-l", inputs.language, "-f", wavFileAddress, fmt.Sprintf("-o%s", subType))
+	err = runCommand(whisperPath, "-m", filesToDownload[fmt.Sprintf("ggml-%s.bin", inputs.model)], "-l", inputs.language, "-f", wavFileAddress, fmt.Sprintf("-o%s", subType))
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
-	fmt.Printf("Output of whisper:\n%s\n", output)
 
 	index := 0
 	extension := "." + subType
