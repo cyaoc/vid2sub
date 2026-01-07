@@ -1,0 +1,33 @@
+# Whisper.net Global Configuration
+
+# Model Configuration
+model:
+  # Default model type: Tiny, Base, Small, Medium, LargeV3, LargeV3Turbo
+  type: "LargeV3Turbo"
+  # Model storage directory
+  storage_dir: "./models"
+
+# Inference Parameters
+inference:
+  # Recognition language: "zh" (Chinese), "en" (English), "ja" (Japanese), or "auto" (auto-detect)
+  language: "auto"
+  # Number of parallel processing threads (0 = auto-detect CPU cores)
+  threads: 0
+  # Beam search size: higher = more accurate but more resource-intensive, default 5
+  beam_size: 5
+
+# External Environment Configuration
+environment:
+  # FFmpeg executable path
+  # Windows: use "ffmpeg" if in PATH, or full path like "C:\\ffmpeg\\bin\\ffmpeg.exe"
+  # Mac/Linux: usually just "ffmpeg"
+  ffmpeg_path: "ffmpeg"
+  # Temporary directory for audio conversion
+  temp_dir: "./temp"
+
+# Output Settings
+output:
+  # Default output format: text, srt, vtt
+  format: "vtt"
+  # Print recognition progress to console in real-time
+  verbose: true
