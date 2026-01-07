@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>14</LangVersion>
+    <RootNamespace>Vid2Sub</RootNamespace>
+    <AssemblyName>vid2sub</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Publish optimization settings (Release mode) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Whisper.net 核心包 -->
+    <PackageReference Include="Whisper.net" Version="1.9.0" />
+
+    <!-- 平台特定运行时 (根据 RuntimeIdentifier 条件选择) -->
+    
+    <!-- macOS: CoreML + CPU -->
+    <PackageReference Include="Whisper.net.Runtime.CoreML" Version="1.9.0" 
+        Condition="$(RuntimeIdentifier.StartsWith('osx'))" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" 
+        Condition="$(RuntimeIdentifier.StartsWith('osx'))" />
+    
+    <!-- Windows: 完整版 (CUDA + Vulkan + OpenVino + CPU) -->
+    <!-- 自动探测顺序: CUDA -> Vulkan -> OpenVino -> CPU -->
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" 
+        Condition="$(RuntimeIdentifier.StartsWith('win'))" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.0" 
+        Condition="$(RuntimeIdentifier.StartsWith('win'))" />
+    <PackageReference Include="Whisper.net.Runtime.OpenVino" Version="1.9.0" 
+        Condition="$(RuntimeIdentifier.StartsWith('win'))" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" 
+        Condition="$(RuntimeIdentifier.StartsWith('win'))" />
+    
+    <!-- Linux: CPU 运行时 -->
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" 
+        Condition="$(RuntimeIdentifier.StartsWith('linux'))" />
+    
+    <!-- 开发模式回退 (无 RID 时使用 CPU 运行时) -->
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" 
+        Condition="'$(RuntimeIdentifier)' == ''" />
+
+    <!-- 配置与命令行 -->
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <PackageReference Include="System.CommandLine" Version="2.0.1" />
+  </ItemGroup>
+
+  <!-- Copy CoreML native libraries to correct runtimes structure (macOS) -->
+  <Target Name="CopyNativeLibraries" AfterTargets="Publish" Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+    <!-- Map osx-arm64 -> macos-arm64, osx-x64 -> macos-x64 -->
+    <PropertyGroup>
+      <MacOSDir Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">macos-arm64</MacOSDir>
+      <MacOSDir Condition="'$(RuntimeIdentifier)' == 'osx-x64'">macos-x64</MacOSDir>
+    </PropertyGroup>
+    
+    <!-- Create directory structure expected by Whisper.net -->
+    <MakeDir Directories="$(PublishDir)runtimes/coreml/$(MacOSDir)" />
+    
+    <!-- Define source files based on platform -->
+    <ItemGroup>
+      <CoreMLLibs Include="$(NuGetPackageRoot)whisper.net.runtime.coreml/1.9.0/build/$(MacOSDir)/*.dylib" />
+    </ItemGroup>
+    
+    <!-- Copy to runtimes/coreml/[macOS dir]/ directory -->
+    <Copy SourceFiles="@(CoreMLLibs)" DestinationFolder="$(PublishDir)runtimes/coreml/$(MacOSDir)" />
+  </Target>
+
+</Project>
