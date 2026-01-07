@@ -14,7 +14,10 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <PublishSingleFile>true</PublishSingleFile>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Windows: 不嵌入原生库，让 Whisper.net NativeLibraryLoader 能找到它们 -->
+    <!-- macOS/Linux: 可以嵌入，因为它们的加载机制不同 -->
+    <IncludeNativeLibrariesForSelfExtract Condition="!$(RuntimeIdentifier.StartsWith('win'))">true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeNativeLibrariesForSelfExtract Condition="$(RuntimeIdentifier.StartsWith('win'))">false</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

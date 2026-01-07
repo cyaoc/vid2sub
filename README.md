@@ -11,16 +11,50 @@ A cross-platform video/audio to subtitle tool powered by Whisper.net.
 - Auto-detection and use of best hardware acceleration (CUDA > Vulkan > CoreML > CPU)
 - Flexible YAML configuration file with command-line overrides
 
+## Quick Start (Portable Version)
+
+Pre-built portable versions are available for immediate use:
+
+| Platform | Download | Included Acceleration |
+|----------|----------|----------------------|
+| **macOS Apple Silicon** | [vid2sub-osx-arm64.zip](https://github.com/cyaoc/vid2sub/releases/latest) | CoreML (Apple Neural Engine) |
+| **Windows x64** | [vid2sub-win-x64.zip](https://github.com/cyaoc/vid2sub/releases/latest) | CUDA, Vulkan, OpenVino, CPU |
+
+Download, extract, and run! FFmpeg is bundled in the portable version.
+
 ## Requirements
 
-### Runtime
+### For Portable Version (Windows)
+
+**Required:**
+- Windows 11 or Windows Server 2022 (or newer)
+- [Microsoft Visual C++ Redistributable 2022 (x64)](https://aka.ms/vc14/vc_redist.x64.exe)
+
+**Optional GPU Acceleration:**
+
+| Acceleration | Requirement | Download |
+|--------------|-------------|----------|
+| **CUDA** | NVIDIA GPU + CUDA Toolkit >= 13.0 | [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) |
+| **Vulkan** | AMD/Intel/NVIDIA GPU + Vulkan driver | Usually included with graphics drivers |
+| **OpenVino** | Intel CPU/GPU + OpenVino >= 2024.4 | [OpenVino Toolkit](https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/download.html) |
+
+> Note: If no GPU acceleration is available, the program automatically falls back to CPU mode.
+
+### For Portable Version (macOS)
+
+- macOS with Apple Silicon (M1/M2/M3/M4)
+- CoreML acceleration is automatically enabled
+
+### For Building from Source
+
+**Runtime:**
 - .NET 10 Runtime (only required for framework-dependent builds; self-contained builds include the runtime)
 
-### External Tools
+**External Tools:**
 - FFmpeg (must be in PATH or specify path in config file)
 
-### Hardware Drivers (Optional, for GPU acceleration)
-- **Windows**: Nvidia CUDA driver or Vulkan driver (supports AMD/Intel integrated graphics)
+**Hardware Drivers (Optional):**
+- **Windows**: NVIDIA CUDA driver or Vulkan driver (supports AMD/Intel integrated graphics)
 - **macOS**: Apple Silicon (automatically uses CoreML)
 - **Linux**: CUDA driver
 
@@ -30,7 +64,7 @@ A cross-platform video/audio to subtitle tool powered by Whisper.net.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/vid2sub.git
+git clone https://github.com/cyaoc/vid2sub.git
 cd vid2sub
 
 # Restore dependencies

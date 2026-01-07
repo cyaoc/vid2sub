@@ -116,8 +116,7 @@ mkdir -p "$DIST_DIR/models"
 echo "[6/6] Cleaning up unnecessary files..."
 case "$PLATFORM" in
     osx-arm64)
-        # macOS ARM64: only keep runtimes/coreml/macos-arm64/
-        # Native libs are in runtimes/, NOT embedded in executable
+        # macOS ARM64: only keep runtimes/macos-arm64/ and runtimes/coreml/macos-arm64/
         rm -rf "$DIST_DIR/runtimes/linux-"* 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/win-"* 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/macos-x64" 2>/dev/null || true
@@ -125,10 +124,10 @@ case "$PLATFORM" in
         rm -rf "$DIST_DIR/runtimes/cuda" 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/vulkan" 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/openvino" 2>/dev/null || true
-        echo "  Kept: runtimes/coreml/macos-arm64/"
+        echo "  Kept: macos-arm64/, coreml/macos-arm64/"
         ;;
     osx-x64)
-        # macOS x64: only keep runtimes/coreml/macos-x64/
+        # macOS x64: only keep runtimes/macos-x64/ and runtimes/coreml/macos-x64/
         rm -rf "$DIST_DIR/runtimes/linux-"* 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/win-"* 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/macos-arm64" 2>/dev/null || true
@@ -136,13 +135,20 @@ case "$PLATFORM" in
         rm -rf "$DIST_DIR/runtimes/cuda" 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/vulkan" 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/openvino" 2>/dev/null || true
-        echo "  Kept: runtimes/coreml/macos-x64/"
+        echo "  Kept: macos-x64/, coreml/macos-x64/"
         ;;
     win-x64)
-        # Windows x64: ALL native DLLs are embedded in exe (IncludeNativeLibrariesForSelfExtract=true)
-        # runtimes/ directory only contains Linux/macOS files, can be removed entirely
-        rm -rf "$DIST_DIR/runtimes" 2>/dev/null || true
-        echo "  Removed: runtimes/ (DLLs embedded in exe)"
+        # Windows x64: keep win-x64/, cuda/win-x64/, vulkan/win-x64/, openvino/win-x64/
+        # Remove other platforms (Linux, macOS, other Windows archs)
+        rm -rf "$DIST_DIR/runtimes/linux-"* 2>/dev/null || true
+        rm -rf "$DIST_DIR/runtimes/macos-"* 2>/dev/null || true
+        rm -rf "$DIST_DIR/runtimes/win-arm64" 2>/dev/null || true
+        rm -rf "$DIST_DIR/runtimes/win-x86" 2>/dev/null || true
+        rm -rf "$DIST_DIR/runtimes/coreml" 2>/dev/null || true
+        rm -rf "$DIST_DIR/runtimes/cuda/linux-"* 2>/dev/null || true
+        rm -rf "$DIST_DIR/runtimes/vulkan/linux-"* 2>/dev/null || true
+        rm -rf "$DIST_DIR/runtimes/openvino/linux-"* 2>/dev/null || true
+        echo "  Kept: win-x64/, cuda/win-x64/, vulkan/win-x64/, openvino/win-x64/"
         ;;
     linux-x64)
         # Linux x64: keep runtimes/linux-x64/ only
@@ -153,7 +159,7 @@ case "$PLATFORM" in
         rm -rf "$DIST_DIR/runtimes/cuda" 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/vulkan" 2>/dev/null || true
         rm -rf "$DIST_DIR/runtimes/openvino" 2>/dev/null || true
-        echo "  Kept: runtimes/linux-x64/"
+        echo "  Kept: linux-x64/"
         ;;
 esac
 
