@@ -8,7 +8,7 @@ namespace Vid2Sub.Infrastructure.Audio;
 /// FFmpeg 音频预处理器
 /// 将各种格式的媒体文件转换为 Whisper 所需的 16kHz 单声道 WAV 格式
 /// </summary>
-public sealed class FFmpegAudioProcessor(EnvironmentConfig config) : IAudioProcessor
+public sealed class FFmpegAudioProcessor(ResolvedEnvironmentConfiguration config) : IAudioProcessor
 {
     private readonly List<string> _tempFiles = [];
     private readonly object _lock = new();
@@ -33,26 +33,9 @@ public sealed class FFmpegAudioProcessor(EnvironmentConfig config) : IAudioProce
         // 生成临时文件路径
         var outputPath = Path.Combine(tempDir, $"{Guid.NewGuid():N}.wav");
         
-        // 构建 FFmpeg 参数
-        // -i: 输入文件
-        // -ar 16000: 采样率 16kHz
-        // -ac 1: 单声道
-        // -c:a pcm_s16le: 16位 PCM 编码
-        // -f wav: WAV 格式输出
-        // -y: 覆盖已存在文件
-        var arguments = $"-i \"{inputPath}\" -ar 16000 -ac 1 -c:a pcm_s16le -f wav -y \"{outputPath}\"";
-        
         using var process = new Process
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = config.FfmpegPath,
-                Arguments = arguments,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            }
+            StartInfo = CreateStartInfo(inputPath, outputPath)
         };
         
         try
@@ -78,13 +61,16 @@ public sealed class FFmpegAudioProcessor(EnvironmentConfig config) : IAudioProce
             
             return outputPath;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            CleanupTempFile(outputPath);
+            throw;
+        }
+        catch (Exception ex)
         {
             // 转换失败时清理可能已创建的输出文件
-            if (File.Exists(outputPath))
-            {
-                try { File.Delete(outputPath); } catch { /* 忽略清理错误 */ }
-            }
+            CleanupTempFile(outputPath);
             
             if (ex.Message.Contains("not found") || ex.Message.Contains("No such file"))
             {
@@ -94,6 +80,33 @@ public sealed class FFmpegAudioProcessor(EnvironmentConfig config) : IAudioProce
             
             throw;
         }
+    }
+
+    public ProcessStartInfo CreateStartInfo(string inputPath, string outputPath)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = config.FfmpegPath,
+            UseShellExecute = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        startInfo.ArgumentList.Add("-y");
+        startInfo.ArgumentList.Add("-i");
+        startInfo.ArgumentList.Add(inputPath);
+        startInfo.ArgumentList.Add("-ar");
+        startInfo.ArgumentList.Add("16000");
+        startInfo.ArgumentList.Add("-ac");
+        startInfo.ArgumentList.Add("1");
+        startInfo.ArgumentList.Add("-c:a");
+        startInfo.ArgumentList.Add("pcm_s16le");
+        startInfo.ArgumentList.Add("-f");
+        startInfo.ArgumentList.Add("wav");
+        startInfo.ArgumentList.Add(outputPath);
+
+        return startInfo;
     }
     
     /// <summary>
@@ -117,6 +130,21 @@ public sealed class FFmpegAudioProcessor(EnvironmentConfig config) : IAudioProce
         catch
         {
             // 忽略清理错误
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+            // Best-effort cancellation cleanup.
         }
     }
     

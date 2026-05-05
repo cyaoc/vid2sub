@@ -49,9 +49,12 @@ artifacts/
 # =========================
 # Project Specific
 # =========================
-models/
+/models/
 tmp/
 outputs/
+TestResults/
+**/TestResults/
+coverage.cobertura.xml
 
 # Vendor binaries (download separately)
 vendor/ffmpeg/osx-arm64/ffmpeg
@@ -127,3 +130,5 @@ Temporary Items
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+.DS_Store

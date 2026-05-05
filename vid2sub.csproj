@@ -8,7 +8,12 @@
     <LangVersion>14</LangVersion>
     <RootNamespace>Vid2Sub</RootNamespace>
     <AssemblyName>vid2sub</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src/**/*.cs" />
+  </ItemGroup>
 
   <!-- Publish optimization settings (Release mode) -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -54,6 +59,8 @@
     <!-- 配置与命令行 -->
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <PackageReference Include="System.CommandLine" Version="2.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
   </ItemGroup>
 
   <!-- Copy CoreML native libraries to correct runtimes structure (macOS) -->

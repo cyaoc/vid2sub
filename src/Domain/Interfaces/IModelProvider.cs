@@ -1,4 +1,4 @@
-using Whisper.net.Ggml;
+using Vid2Sub.Domain.Enums;
 
 namespace Vid2Sub.Domain.Interfaces;
 
@@ -16,7 +16,7 @@ public interface IModelProvider
     /// <param name="cancellationToken">取消令牌</param>
     /// <returns>模型文件的完整路径</returns>
     Task<string> EnsureModelAsync(
-        GgmlType modelType,
+        ModelType modelType,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default);
     
@@ -25,12 +25,12 @@ public interface IModelProvider
     /// </summary>
     /// <param name="modelType">模型类型</param>
     /// <returns>是否存在</returns>
-    bool ModelExists(GgmlType modelType);
+    bool ModelExists(ModelType modelType);
     
     /// <summary>
     /// 获取模型文件路径
     /// </summary>
     /// <param name="modelType">模型类型</param>
     /// <returns>模型文件路径</returns>
-    string GetModelPath(GgmlType modelType);
+    string GetModelPath(ModelType modelType);
 }

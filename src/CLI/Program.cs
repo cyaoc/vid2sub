@@ -1,104 +1,102 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
+using Microsoft.Extensions.Logging;
 using Vid2Sub.Application;
+using Vid2Sub.Domain.Enums;
 using Vid2Sub.Domain.Models;
 using Vid2Sub.Infrastructure.Audio;
 using Vid2Sub.Infrastructure.Configuration;
+using Vid2Sub.Infrastructure.Files;
 using Vid2Sub.Infrastructure.Models;
+using Vid2Sub.Infrastructure.Subtitles;
 
 namespace Vid2Sub.CLI;
 
 /// <summary>
-/// Vid2Sub 命令行入口
-/// 视频/音频转字幕工具
+/// Vid2Sub command-line entry point.
 /// </summary>
 public static class Program
 {
     public static int Main(string[] args)
     {
         var rootCommand = new RootCommand("Vid2Sub - Video/audio to subtitle tool powered by Whisper.net");
-        
-        // 定义参数
+
         var inputArgument = new Argument<string[]>("input")
         {
-            Description = "Input file(s) or directory path (supports multiple)",
+            Description = "Input file(s), directory path(s), or wildcard pattern(s)",
             Arity = ArgumentArity.OneOrMore
         };
-        
-        // 定义选项
+
         var outputOption = new Option<string?>("--output-dir", "-o")
         {
             Description = "Output directory (default: same as input file)"
         };
-        
+
         var formatOption = new Option<string?>("--format", "-f")
         {
             Description = "Output format: srt, vtt, text"
         };
-        
+
         var languageOption = new Option<string?>("--language", "-l")
         {
             Description = "Recognition language: auto, zh, en, ja, etc."
         };
-        
+
         var modelOption = new Option<string?>("--model", "-m")
         {
             Description = "Model type: Tiny, Base, Small, Medium, LargeV3, LargeV3Turbo"
         };
-        
+
         var configOption = new Option<string?>("--config", "-c")
         {
             Description = "Specify config file path"
         };
-        
-        var verboseOption = new Option<bool>("--verbose", "-v")
-        {
-            Description = "Verbose output mode"
-        };
-        
+
         var threadsOption = new Option<int?>("--threads", "-t")
         {
-            Description = "Number of processing threads"
+            Description = "Number of processing threads (0 = processor count)"
         };
-        
-        // 添加到根命令
+
+        var logLevelOption = new Option<string?>("--log-level")
+        {
+            Description = "Log level: quiet, error, warning, information, debug"
+        };
+
+        var overwriteOption = new Option<bool>("--overwrite")
+        {
+            Description = "Overwrite existing subtitle files"
+        };
+
         rootCommand.Arguments.Add(inputArgument);
         rootCommand.Options.Add(outputOption);
         rootCommand.Options.Add(formatOption);
         rootCommand.Options.Add(languageOption);
         rootCommand.Options.Add(modelOption);
         rootCommand.Options.Add(configOption);
-        rootCommand.Options.Add(verboseOption);
         rootCommand.Options.Add(threadsOption);
-        
-        // 设置处理程序
+        rootCommand.Options.Add(logLevelOption);
+        rootCommand.Options.Add(overwriteOption);
+
         rootCommand.SetAction(parseResult =>
         {
-            var inputs = parseResult.GetValue(inputArgument) ?? [];
-            var output = parseResult.GetValue(outputOption);
-            var format = parseResult.GetValue(formatOption);
-            var language = parseResult.GetValue(languageOption);
-            var model = parseResult.GetValue(modelOption);
-            var configPath = parseResult.GetValue(configOption);
-            var verbose = parseResult.GetValue(verboseOption);
-            var threads = parseResult.GetValue(threadsOption);
-            
+            var cliOptions = new CliOptions(
+                Inputs: parseResult.GetValue(inputArgument) ?? [],
+                OutputDir: parseResult.GetValue(outputOption),
+                Format: parseResult.GetValue(formatOption),
+                Language: parseResult.GetValue(languageOption),
+                Model: parseResult.GetValue(modelOption),
+                ConfigPath: parseResult.GetValue(configOption),
+                Threads: parseResult.GetValue(threadsOption),
+                LogLevel: parseResult.GetValue(logLevelOption),
+                Overwrite: parseResult.GetValue(overwriteOption));
+
             try
             {
-                return RunAsync(
-                    inputs,
-                    output,
-                    format,
-                    language,
-                    model,
-                    configPath,
-                    verbose,
-                    threads,
-                    CancellationToken.None).GetAwaiter().GetResult();
+                return RunAsync(cliOptions, CancellationToken.None).GetAwaiter().GetResult();
             }
             catch (OperationCanceledException)
             {
-                Console.WriteLine("\nOperation cancelled");
+                Console.Error.WriteLine("Operation cancelled");
                 return 130;
             }
             catch (Exception ex)
@@ -107,177 +105,128 @@ public static class Program
                 return 1;
             }
         });
-        
+
         return rootCommand.Parse(args).Invoke();
     }
-    
-    /// <summary>
-    /// 执行转录任务
-    /// </summary>
+
     private static async Task<int> RunAsync(
-        string[] inputs,
-        string? output,
-        string? format,
-        string? language,
-        string? model,
-        string? configPath,
-        bool verbose,
-        int? threads,
+        CliOptions cliOptions,
         CancellationToken cancellationToken)
     {
-        // 1. 加载配置（优先级: 命令行参数 > YAML 配置 > 默认值）
-        var configLoader = new YamlConfigLoader();
-        var yamlPath = configPath ?? YamlConfigLoader.GetDefaultConfigPath();
-        var config = await configLoader.LoadAsync(yamlPath, cancellationToken);
-        
-        // 1.5 解析相对路径（使其相对于可执行文件所在目录）
-        config.ResolveRelativePaths();
-        
-        // 2. 应用命令行覆盖
-        ApplyCommandLineOverrides(config, format, language, model, verbose, threads);
-        
-        if (config.Output.Verbose)
+        var resolver = new ConfigurationResolver(
+            Directory.GetCurrentDirectory(),
+            AppContext.BaseDirectory);
+
+        var configResult = await resolver.ResolveAsync(
+            cliOptions.ConfigPath,
+            cliOptions,
+            cancellationToken);
+
+        if (!configResult.IsSuccess)
         {
-            Console.WriteLine("Vid2Sub - Video/Audio to Subtitle Tool");
-            Console.WriteLine($"Config file: {(File.Exists(yamlPath) ? yamlPath : "using defaults")}");
-            Console.WriteLine($"Model: {config.Model.Type}");
-            Console.WriteLine($"Language: {config.Inference.Language}");
-            Console.WriteLine($"Output format: {config.Output.Format}");
-            Console.WriteLine();
-        }
-        
-        // 3. 初始化服务
-        var modelProvider = new WhisperModelProvider(config.Model);
-        var audioProcessor = new FFmpegAudioProcessor(config.Environment);
-        
-        await using var transcriptionService = new TranscriptionService(modelProvider, audioProcessor, config);
-        
-        // 4. 收集所有输入文件
-        var filesToProcess = CollectInputFiles(inputs);
-        
-        if (filesToProcess.Count == 0)
-        {
-            Console.Error.WriteLine("Error: No valid input files found");
+            foreach (var error in configResult.Errors)
+            {
+                Console.Error.WriteLine($"{error.Key}: {error.Message}");
+            }
+
             return 1;
         }
-        
-        Console.WriteLine($"Found {filesToProcess.Count} file(s) to process\n");
-        
-        // 5. 处理文件（统一使用 ProcessAsync）
-        var successCount = 0;
-        var failCount = 0;
-        
-        await foreach (var result in transcriptionService.ProcessAsync(
-            filesToProcess,
-            output,  // 输出目录（null = 输入文件同目录）
-            cancellationToken))
+
+        var config = configResult.Configuration!;
+        PrintStartup(config, cliOptions);
+
+        var collector = new InputFileCollector();
+        var collectedInputs = collector.Collect(cliOptions.Inputs);
+
+        var outputPlanner = new OutputPlanner();
+        var outputPlan = outputPlanner.CreatePlan(collectedInputs, config);
+
+        var outcomes = new List<TranscriptionResult>(outputPlan.Outcomes);
+        if (outputPlan.WorkItems.Count > 0)
         {
-            if (result.Segments.Count > 0)
+            using var loggerFactory = LoggerFactory.Create(builder =>
             {
-                successCount++;
-            }
-            else
+                builder
+                    .SetMinimumLevel(ToMicrosoftLogLevel(config.Output.LogLevel))
+                    .AddConsole();
+            });
+
+            var modelProvider = new WhisperModelProvider(config.Model);
+            var audioProcessor = new FFmpegAudioProcessor(config.Environment);
+            var runtimeFactory = new WhisperRuntimeFactoryAdapter();
+            var audioContentReader = new FileAudioContentReader();
+            var subtitleWriter = new SubtitleOutputWriter(config.Output.Format);
+            var progress = new ConsoleTranscriptionProgress(config.Output.LogLevel);
+            var logger = loggerFactory.CreateLogger<TranscriptionService>();
+
+            await using var transcriptionService = new TranscriptionService(
+                modelProvider,
+                audioProcessor,
+                runtimeFactory,
+                audioContentReader,
+                subtitleWriter,
+                progress,
+                config,
+                logger);
+
+            await foreach (var result in transcriptionService.ProcessAsync(outputPlan.WorkItems, cancellationToken))
             {
-                failCount++;
+                outcomes.Add(result);
             }
         }
-        
-        // 6. 输出统计
+
+        PrintOutcomes(outcomes, config.Output.LogLevel);
+
+        return outcomes.Any(outcome => outcome.Status == TranscriptionStatus.Failed) ? 1 : 0;
+    }
+
+    private static void PrintStartup(ResolvedAppConfiguration config, CliOptions cliOptions)
+    {
+        if (config.Output.LogLevel is Vid2SubLogLevel.Quiet or Vid2SubLogLevel.Error)
+        {
+            return;
+        }
+
+        Console.WriteLine("Vid2Sub - Video/Audio to Subtitle Tool");
+        Console.WriteLine($"Inputs: {cliOptions.Inputs.Count}");
+        Console.WriteLine($"Model: {config.Model.Type}");
+        Console.WriteLine($"Language: {config.Inference.Language}");
+        Console.WriteLine($"Output format: {config.Output.Format}");
         Console.WriteLine();
-        Console.WriteLine($"Processing complete: {successCount} succeeded, {failCount} failed");
-        
-        return failCount > 0 ? 1 : 0;
     }
-    
-    /// <summary>
-    /// 应用命令行参数覆盖
-    /// </summary>
-    private static void ApplyCommandLineOverrides(
-        AppConfiguration config,
-        string? format,
-        string? language,
-        string? model,
-        bool verbose,
-        int? threads)
+
+    private static void PrintOutcomes(
+        IReadOnlyList<TranscriptionResult> outcomes,
+        Vid2SubLogLevel logLevel)
     {
-        if (!string.IsNullOrEmpty(format))
+        var succeeded = outcomes.Count(outcome => outcome.Status == TranscriptionStatus.Success);
+        var failed = outcomes.Count(outcome => outcome.Status == TranscriptionStatus.Failed);
+        var skipped = outcomes.Count(outcome => outcome.Status == TranscriptionStatus.Skipped);
+
+        foreach (var outcome in outcomes.Where(outcome => outcome.Status != TranscriptionStatus.Success))
         {
-            config.Output.Format = format;
+            var stream = outcome.Status == TranscriptionStatus.Failed ? Console.Error : Console.Out;
+            stream.WriteLine($"{outcome.Status}: {outcome.SourceFile}");
+            if (outcome.Error is not null && logLevel != Vid2SubLogLevel.Quiet)
+            {
+                stream.WriteLine($"  [{outcome.Error.Stage}/{outcome.Error.Code}] {outcome.Error.Message}");
+            }
         }
-        
-        if (!string.IsNullOrEmpty(language))
+
+        if (logLevel != Vid2SubLogLevel.Quiet)
         {
-            config.Inference.Language = language;
-        }
-        
-        if (!string.IsNullOrEmpty(model))
-        {
-            config.Model.Type = model;
-        }
-        
-        if (verbose)
-        {
-            config.Output.Verbose = true;
-        }
-        
-        if (threads.HasValue)
-        {
-            config.Inference.Threads = threads.Value;
+            Console.WriteLine();
+            Console.WriteLine($"Processing complete: {succeeded} succeeded, {failed} failed, {skipped} skipped");
         }
     }
-    
-    /// <summary>
-    /// 收集所有输入文件
-    /// </summary>
-    private static List<string> CollectInputFiles(string[] inputs)
+
+    private static LogLevel ToMicrosoftLogLevel(Vid2SubLogLevel logLevel) => logLevel switch
     {
-        var supportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm",  // 视频格式
-            ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma"   // 音频格式
-        };
-        
-        var files = new List<string>();
-        
-        foreach (var input in inputs)
-        {
-            var fullPath = Path.GetFullPath(input);
-            
-            if (Directory.Exists(fullPath))
-            {
-                // 目录：收集所有支持的文件
-                var dirFiles = Directory.EnumerateFiles(fullPath, "*.*", SearchOption.TopDirectoryOnly)
-                    .Where(f => supportedExtensions.Contains(Path.GetExtension(f)))
-                    .OrderBy(f => f);
-                
-                files.AddRange(dirFiles);
-            }
-            else if (File.Exists(fullPath))
-            {
-                // 单个文件
-                files.Add(fullPath);
-            }
-            else
-            {
-                // 尝试作为通配符模式处理
-                var directory = Path.GetDirectoryName(fullPath);
-                var pattern = Path.GetFileName(fullPath);
-                
-                if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory))
-                {
-                    var matchedFiles = Directory.EnumerateFiles(directory, pattern, SearchOption.TopDirectoryOnly)
-                        .Where(f => supportedExtensions.Contains(Path.GetExtension(f)))
-                        .OrderBy(f => f);
-                    
-                    files.AddRange(matchedFiles);
-                }
-                else
-                {
-                    Console.Error.WriteLine($"Warning: Input not found '{input}'");
-                }
-            }
-        }
-        
-        return files.Distinct().ToList();
-    }
+        Vid2SubLogLevel.Quiet => LogLevel.None,
+        Vid2SubLogLevel.Error => LogLevel.Error,
+        Vid2SubLogLevel.Warning => LogLevel.Warning,
+        Vid2SubLogLevel.Information => LogLevel.Information,
+        Vid2SubLogLevel.Debug => LogLevel.Debug,
+        _ => LogLevel.Information
+    };
 }

@@ -29,5 +29,5 @@ environment:
 output:
   # Default output format: text, srt, vtt
   format: "vtt"
-  # Print recognition progress to console in real-time
-  verbose: true
+  # Console output level: quiet, error, warning, information, debug
+  log_level: "information"

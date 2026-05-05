@@ -112,6 +112,16 @@ Output: `bin/Release/net10.0/<runtime-identifier>/publish/vid2sub` (single execu
 
 These optimizations significantly reduce the output size compared to a standard self-contained build.
 
+### Testing
+
+```bash
+# Build and run unit tests
+./scripts/test.sh
+
+# Full pre-ship verification, including publish checks
+./scripts/test.sh --full
+```
+
 ## Usage
 
 ### Basic Usage
@@ -148,7 +158,8 @@ Options:
   -m, --model <type>       Model type: Tiny, Base, Small, Medium, LargeV3, LargeV3Turbo
   -c, --config <path>      Specify config file path
   -t, --threads <num>      Number of processing threads
-  -v, --verbose            Verbose output mode
+  --log-level <level>      Log level: quiet, error, warning, information, debug
+  --overwrite              Overwrite existing subtitle files
   --help                   Show help information
 ```
 
@@ -180,7 +191,7 @@ environment:
 # Output Settings
 output:
   format: "vtt"            # text, srt, vtt
-  verbose: true
+  log_level: "information" # quiet, error, warning, information, debug
 ```
 
 ### Configuration Priority

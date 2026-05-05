@@ -49,15 +49,7 @@ public sealed class YamlConfigLoader
             return new AppConfiguration();
         }
         
-        try
-        {
-            return _deserializer.Deserialize<AppConfiguration>(yaml) ?? new AppConfiguration();
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Warning: Config file parsing failed, using defaults. Error: {ex.Message}");
-            return new AppConfiguration();
-        }
+        return _deserializer.Deserialize<AppConfiguration>(yaml) ?? new AppConfiguration();
     }
     
     /// <summary>
