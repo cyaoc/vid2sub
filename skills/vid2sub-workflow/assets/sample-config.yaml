@@ -1,0 +1,10 @@
+workflow:
+  source_language: ja
+  target_language: zh
+  output_format: srt
+  sample_rows: 3
+  overwrite: false
+
+paths:
+  vid2sub_executable: ./bin/Release/net10.0/publish/vid2sub
+  output_dir: ./subtitles

@@ -122,6 +122,85 @@ These optimizations significantly reduce the output size compared to a standard 
 ./scripts/test.sh --full
 ```
 
+## Codex Workflow MCP Server
+
+Vid2Sub also includes an optional local Codex workflow layer for subtitle correction and translation with an Excel glossary.
+
+### What It Does
+
+The Codex workflow is for this local subtitle pipeline:
+
+1. Generate raw Japanese subtitles from a media file with `vid2sub`.
+2. Read a `.xlsx` glossary or correction workbook.
+3. Correct the Japanese subtitle text using the glossary.
+4. Translate the corrected Japanese subtitles into Chinese.
+5. Write delivery files plus a workflow manifest and glossary audit.
+
+Expected outputs:
+
+```text
+{inputName}.raw.ja.srt
+{inputName}.corrected.ja.srt
+{inputName}.translated.zh.srt
+workflow.manifest.json
+glossary-audit.json
+```
+
+### Build The Tools
+
+Build the main `vid2sub` CLI:
+
+```bash
+dotnet publish -c Release
+```
+
+Build the workflow MCP server:
+
+```bash
+dotnet publish tools/Vid2Sub.WorkflowMcp/Vid2Sub.WorkflowMcp.csproj -c Release
+```
+
+### Configure Codex
+
+Add the published MCP server to your Codex MCP configuration. Use absolute paths.
+
+```toml
+[mcp_servers.vid2sub-workflow]
+command = "/absolute/path/to/vid2sub/tools/Vid2Sub.WorkflowMcp/bin/Release/net10.0/publish/vid2sub-workflow-mcp"
+args = []
+```
+
+Install or symlink the skill directory into your Codex skills directory:
+
+```text
+skills/vid2sub-workflow/
+```
+
+### Run The Workflow
+
+In Codex, invoke the skill explicitly:
+
+```text
+$vid2sub-workflow
+```
+
+Then provide:
+
+- the media file path
+- the `.xlsx` glossary path
+- the output directory
+- the published `vid2sub` executable path
+
+The skill will inspect the workbook, ask you to confirm the sheet/column mapping when needed, show the output files before writing, and use the MCP tools to read/write subtitles safely inside the confirmed output directory.
+
+### Notes
+
+- The workflow uses `.xlsx` glossaries through ClosedXML.
+- It does not overwrite existing output files unless you explicitly confirm overwrite.
+- It keeps subtitle timestamps unchanged during correction and translation unless you ask for retiming, splitting, or merging.
+- Installation and smoke-test details are in `docs/vid2sub-workflow-install.md`.
+- Prompt/eval cases for glossary behavior are in `docs/vid2sub-workflow-evals.md`.
+
 ## Usage
 
 ### Basic Usage
@@ -214,6 +293,10 @@ vid2sub/
 │   │   └── Configuration/
 │   ├── Application/      # Application layer: business orchestration
 │   └── CLI/              # Command-line entry point
+├── tools/
+│   └── Vid2Sub.WorkflowMcp/  # Local MCP server for Codex workflow tools
+├── skills/
+│   └── vid2sub-workflow/     # Codex skill for glossary-assisted subtitle workflow
 ├── config.yaml           # Default config file
 └── vid2sub.csproj
 ```

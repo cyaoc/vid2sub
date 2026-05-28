@@ -18,10 +18,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../vid2sub.csproj" />
+    <ProjectReference Include="../../tools/Vid2Sub.WorkflowMcp/Vid2Sub.WorkflowMcp.csproj" />
   </ItemGroup>
 
 </Project>

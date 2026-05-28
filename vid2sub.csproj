@@ -12,13 +12,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="src/**/*.cs" />
+    <Compile Include="src/**/*.cs" Exclude="src/Infrastructure/Workflow/**/*.cs" />
   </ItemGroup>
 
   <!-- Publish optimization settings (Release mode) -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <SelfContained Condition="'$(RuntimeIdentifier)' == ''">false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <EnableCompressionInSingleFile Condition="'$(SelfContained)' == 'true'">true</EnableCompressionInSingleFile>
     <!-- Windows: 不嵌入原生库，让 Whisper.net NativeLibraryLoader 能找到它们 -->
     <!-- macOS/Linux: 可以嵌入，因为它们的加载机制不同 -->
     <IncludeNativeLibrariesForSelfExtract Condition="!$(RuntimeIdentifier.StartsWith('win'))">true</IncludeNativeLibrariesForSelfExtract>
