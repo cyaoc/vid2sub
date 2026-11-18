@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- One version for every Whisper.net package; src/vid2sub.csproj also uses it to locate the CoreML libraries. -->
+    <WhisperNetVersion>1.9.1</WhisperNetVersion>
+    <ManagedCodecsVersion>0.18.0</ManagedCodecsVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Whisper.net" Version="$(WhisperNetVersion)" />
+    <PackageVersion Include="Whisper.net.Runtime" Version="$(WhisperNetVersion)" />
+    <PackageVersion Include="Whisper.net.Runtime.CoreML" Version="$(WhisperNetVersion)" />
+    <PackageVersion Include="Whisper.net.Runtime.Cuda" Version="$(WhisperNetVersion)" />
+    <PackageVersion Include="Whisper.net.Runtime.Vulkan" Version="$(WhisperNetVersion)" />
+    <PackageVersion Include="Whisper.net.Runtime.OpenVino" Version="$(WhisperNetVersion)" />
+    <PackageVersion Include="ManagedCodecs.Containers" Version="$(ManagedCodecsVersion)" />
+    <PackageVersion Include="ManagedCodecs.Aac" Version="$(ManagedCodecsVersion)" />
+    <PackageVersion Include="ManagedCodecs.Mp3" Version="$(ManagedCodecsVersion)" />
+    <PackageVersion Include="System.CommandLine" Version="3.0.0" />
+    <PackageVersion Include="YamlDotNet" Version="18.1.0" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
+  </ItemGroup>
+</Project>

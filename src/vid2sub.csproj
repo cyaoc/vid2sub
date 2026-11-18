@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Vid2Sub</RootNamespace>
+    <AssemblyName>vid2sub</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <SelfContained Condition="'$(RuntimeIdentifier)' == ''">false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile Condition="'$(SelfContained)' == 'true'">true</EnableCompressionInSingleFile>
+    <!-- Windows keeps native libraries beside the exe so Whisper.net's loader can find them; macOS/Linux embed them. -->
+    <IncludeNativeLibrariesForSelfExtract Condition="!$(RuntimeIdentifier.StartsWith('win'))">true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Vid2Sub.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Whisper.net" />
+    <!-- Whisper.net probes the referenced runtimes in the order CUDA > Vulkan > CoreML > OpenVINO > CPU. -->
+    <PackageReference Include="Whisper.net.Runtime" />
+    <PackageReference Include="Whisper.net.Runtime.CoreML" Condition="$(RuntimeIdentifier.StartsWith('osx'))" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Condition="$(RuntimeIdentifier.StartsWith('win'))" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Condition="$(RuntimeIdentifier.StartsWith('win'))" />
+    <PackageReference Include="Whisper.net.Runtime.OpenVino" Condition="$(RuntimeIdentifier.StartsWith('win'))" />
+
+    <PackageReference Include="ManagedCodecs.Containers" />
+    <PackageReference Include="ManagedCodecs.Aac" />
+    <PackageReference Include="ManagedCodecs.Mp3" />
+    <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <!-- Whisper.net looks for CoreML libraries under runtimes/coreml/macos-*, which publish does not lay out by itself. -->
+  <Target Name="CopyCoreMLLibraries" AfterTargets="Publish" Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+    <PropertyGroup>
+      <MacOSDir>$(RuntimeIdentifier.Replace('osx', 'macos'))</MacOSDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <CoreMLLibs Include="$(NuGetPackageRoot)whisper.net.runtime.coreml/$(WhisperNetVersion)/build/$(MacOSDir)/*.dylib" />
+    </ItemGroup>
+    <Error Condition="'@(CoreMLLibs)' == ''" Text="No CoreML libraries found for $(MacOSDir) in Whisper.net.Runtime.CoreML $(WhisperNetVersion); the package layout changed." />
+    <Copy SourceFiles="@(CoreMLLibs)" DestinationFolder="$(PublishDir)runtimes/coreml/$(MacOSDir)" />
+  </Target>
+
+</Project>

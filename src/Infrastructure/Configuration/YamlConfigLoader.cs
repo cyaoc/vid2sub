@@ -1,84 +1,55 @@
 using Vid2Sub.Domain.Models;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
 namespace Vid2Sub.Infrastructure.Configuration;
 
-/// <summary>
-/// YAML 配置加载器
-/// 负责从 YAML 文件加载应用程序配置
-/// </summary>
-public sealed class YamlConfigLoader
+/// <summary>Loads <see cref="AppConfiguration"/> from config.yaml.</summary>
+public static class YamlConfigLoader
 {
-    private readonly IDeserializer _deserializer;
-    
-    public YamlConfigLoader()
-    {
-        _deserializer = new DeserializerBuilder()
-            .WithNamingConvention(UnderscoredNamingConvention.Instance)
-            .IgnoreUnmatchedProperties()
-            .Build();
-    }
-    
+    private const string FileName = "config.yaml";
+
+    private static readonly IDeserializer Deserializer = new DeserializerBuilder()
+        .WithNamingConvention(UnderscoredNamingConvention.Instance)
+        .IgnoreUnmatchedProperties() // config files written for older versions still carry removed keys (ffmpeg_path, temp_dir)
+        .Build();
+
     /// <summary>
-    /// 从文件加载配置
+    /// Reads <paramref name="explicitPath"/> when given; otherwise config.yaml from the working directory,
+    /// then from beside the executable; otherwise the defaults.
     /// </summary>
-    /// <param name="filePath">配置文件路径</param>
-    /// <param name="cancellationToken">取消令牌</param>
-    /// <returns>应用程序配置</returns>
-    public async Task<AppConfiguration> LoadAsync(string filePath, CancellationToken cancellationToken = default)
+    public static async Task<AppConfiguration> LoadAsync(string? explicitPath, CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(filePath))
+        if (explicitPath is not null && !File.Exists(explicitPath))
         {
-            return new AppConfiguration();
+            throw new FileNotFoundException($"Config file not found: {explicitPath}");
         }
-        
-        var yaml = await File.ReadAllTextAsync(filePath, cancellationToken);
-        return Load(yaml);
+
+        string?[] candidates = [explicitPath, Path.GetFullPath(FileName), Path.Combine(AppContext.BaseDirectory, FileName)];
+        var path = candidates.FirstOrDefault(File.Exists);
+        var config = path is null ? new AppConfiguration() : Parse(await File.ReadAllTextAsync(path, cancellationToken));
+
+        // Anchored to the executable so a portable build finds the models folder shipped beside it.
+        config.Model.StorageDir = Path.GetFullPath(config.Model.StorageDir, AppContext.BaseDirectory);
+        return config;
     }
-    
-    /// <summary>
-    /// 从 YAML 字符串加载配置
-    /// </summary>
-    /// <param name="yaml">YAML 内容</param>
-    /// <returns>应用程序配置</returns>
-    public AppConfiguration Load(string yaml)
+
+    public static AppConfiguration Parse(string yaml)
     {
-        if (string.IsNullOrWhiteSpace(yaml))
-        {
-            return new AppConfiguration();
-        }
-        
         try
         {
-            return _deserializer.Deserialize<AppConfiguration>(yaml) ?? new AppConfiguration();
+            var config = Deserializer.Deserialize<AppConfiguration?>(yaml) ?? new AppConfiguration();
+
+            // A section left empty in YAML ("model:") deserializes to null.
+            config.Model ??= new ModelConfig();
+            config.Inference ??= new InferenceConfig();
+            config.Output ??= new OutputConfig();
+            return config;
         }
-        catch (Exception ex)
+        catch (YamlException ex)
         {
-            Console.Error.WriteLine($"Warning: Config file parsing failed, using defaults. Error: {ex.Message}");
-            return new AppConfiguration();
+            throw new InvalidDataException($"Invalid config file: {ex.InnerException?.Message ?? ex.Message} ({ex.Start})", ex);
         }
-    }
-    
-    /// <summary>
-    /// 获取默认配置文件路径
-    /// </summary>
-    public static string GetDefaultConfigPath()
-    {
-        // 优先查找当前目录
-        var currentDir = Path.Combine(Directory.GetCurrentDirectory(), "config.yaml");
-        if (File.Exists(currentDir))
-        {
-            return currentDir;
-        }
-        
-        // 然后查找程序所在目录
-        var appDir = Path.Combine(AppContext.BaseDirectory, "config.yaml");
-        if (File.Exists(appDir))
-        {
-            return appDir;
-        }
-        
-        return currentDir;
     }
 }

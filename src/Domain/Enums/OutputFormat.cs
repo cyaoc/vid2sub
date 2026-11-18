@@ -9,12 +9,12 @@ public enum OutputFormat
     /// 纯文本格式
     /// </summary>
     Text,
-    
+
     /// <summary>
     /// SubRip 字幕格式 (.srt)
     /// </summary>
     Srt,
-    
+
     /// <summary>
     /// WebVTT 字幕格式 (.vtt)
     /// </summary>
