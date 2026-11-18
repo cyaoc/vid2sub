@@ -49,14 +49,11 @@ artifacts/
 # =========================
 # Project Specific
 # =========================
-models/
+# Whisper model files and partial downloads, wherever storage_dir points
+ggml-*.bin*
 tmp/
 outputs/
 
-# Vendor binaries (download separately)
-vendor/ffmpeg/osx-arm64/ffmpeg
-vendor/ffmpeg/win-x64/ffmpeg.exe
-vendor/ffmpeg/linux-x64/ffmpeg
 
 # =========================
 # OS Generated Files
@@ -127,3 +124,4 @@ Temporary Items
 
 # Built Visual Studio Code Extensions
 *.vsix
+TestResults/

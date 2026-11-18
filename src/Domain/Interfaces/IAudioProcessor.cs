@@ -1,22 +1,9 @@
 namespace Vid2Sub.Domain.Interfaces;
 
-/// <summary>
-/// 音频预处理器接口
-/// 负责将各种格式的媒体文件转换为 Whisper 所需的 WAV 格式
-/// </summary>
-public interface IAudioProcessor : IAsyncDisposable
+/// <summary>Turns a media file into the audio Whisper consumes.</summary>
+public interface IAudioProcessor
 {
-    /// <summary>
-    /// 将媒体文件转换为 16kHz 单声道 WAV 格式
-    /// </summary>
-    /// <param name="inputPath">输入媒体文件路径</param>
-    /// <param name="cancellationToken">取消令牌</param>
-    /// <returns>转换后的 WAV 文件路径</returns>
-    Task<string> ConvertToWavAsync(string inputPath, CancellationToken cancellationToken = default);
-    
-    /// <summary>
-    /// 清理指定的临时文件
-    /// </summary>
-    /// <param name="wavPath">WAV 文件路径</param>
-    void CleanupTempFile(string wavPath);
+    /// <summary>Decodes the file's audio to 16 kHz mono samples in [-1, 1].</summary>
+    /// <exception cref="NotSupportedException">The container or audio codec is not supported.</exception>
+    Task<ReadOnlyMemory<float>> DecodeAsync(string inputPath, CancellationToken cancellationToken = default);
 }

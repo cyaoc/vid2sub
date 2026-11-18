@@ -1,55 +1,46 @@
-# Whisper.net 集成开发规范 (Cursor Agent 指令)
+## Agent skills
 
-## 1. 项目概览与环境约束
-- **目标**: 构建一个跨平台、环境自适应的 Whisper 语音转文字工具。
-- **运行时环境**: .NET 10
-- **Language**: C# 14 (充分利用 Primary Constructors 增强版、更强的类型推导等)
-- **硬件加速策略 (核心)**: 
-    - **优先级管理**: 遵循 `CUDA > Vulkan > CoreML > CPU` 的加载策略。
-    - **Windows 普适化**: 必须引用 `Whisper.net.Runtime.Vulkan` 以支持广大非 Nvidia 显卡（AMD/Intel 核显）用户。
-    - **依赖注入**: 引用所有必要的 Runtime NuGet 包，确保 Autoprobe 机制生效。
+### Issue tracker
 
-## 2. 架构设计原则 (SOLID & DDD)
-在编写代码时必须遵循以下工程标准：
-- **Single Responsibility (SRP)**: 每个类仅负责一个功能。例如：`AudioService` 仅处理转码，不涉及模型下载。
-- **Dependency Inversion (DIP)**: 依赖于接口而非具体实现。例如：定义 `IModelProvider` 接口，方便未来扩展不同的下载源。
-- **DDD 思想**: 
-    - **Domain Layer**: 包含识别任务的逻辑、语言枚举、结果模型。
-    - **Infrastructure Layer**: 负责 FFmpeg 进程调用、磁盘 IO、NuGet 运行时加载。
-- **Clean Code**: 优先使用 C# 14 的新特性（如 Primary Constructors, Collection Expressions），保持代码简洁、高可读。
+Issues live in GitHub Issues on cyaoc/vid2sub (via `gh`). See `docs/agents/issue-tracker.md`.
 
-## 3. 技术方案约束
+### Triage labels
 
-### A. 配置与参数管理
-- **覆盖逻辑**: 命令行参数 > YAML 配置文件 > 默认值。
-- **库支持**: `YamlDotNet`, `System.CommandLine`。
-- **无感加速**: 禁止在业务层写任何平台探测 (OS/GPU) 逻辑。
-- **异常处理**: 必须处理“显存溢出”或“驱动不支持”的异常，并能优雅降级到 CPU。
-- 优先使用 C# 14 的新特性简化代码（如更简洁的集合表达式、增强型 Lambda 参数等）。
-- 使用 `Scoped` 资源管理，确保 Native 资源在异步流结束时立即释放。
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 
-### B. 音频适配流水线 (Infrastructure)
-- **FFmpeg 规范**: 
-    - 必须通过 `System.Diagnostics.Process` 直接调用。
-    - 参数: `-i {in} -ar 16000 -ac 1 -c:a pcm_s16le -f wav {out}`。
-    - **生命周期**: 必须实现 `IDisposable` 以确保临时文件在任务结束或崩溃时能被清理。
+### Domain docs
 
-### C. 环境探测与初始化 (Autoprobe)
-- **禁止**: 禁止使用手动 OS 判断来切换 GPU/CPU。
-- **逻辑**: 直接初始化 `WhisperFactory`，通过运行时包自动发现硬件加速器。
-- **日志**: 启动时必须打印 `factory.RuntimeDescription`。
+Single-context: one root `GLOSSARY.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
-### D. 异步与资源管理
-- 全程使用 `async/await` 处理文件 IO 和长耗时推理任务。
-- 确保 `WhisperFactory` 和 `WhisperProcessor` 被正确释放，避免显存/内存泄漏。
+# 项目约束
 
-## 4. 推荐目录结构
-- `/src/Domain`: 实体、接口、配置模型。
-- `/src/Infrastructure`: FFmpeg 实现、模型下载器、文件系统访问。
-- `/src/Application`: 协调业务流的主服务。
-- `/src/CLI`: `Program.cs` 及其参数解析逻辑。
+Vid2Sub 是 .NET 10 / C# 14 的命令行工具：视频或音频进，SRT / VTT / TXT 字幕出，识别引擎是 Whisper.net。
 
-## 5. 交互指令建议
-- "请按照 @agents.md 要求的 SOLID 原则，将目前的逻辑重构为 Domain 和 Infrastructure 两层。"
-- "基于 .NET 10 语法实现 @agents.md 中的音频预处理逻辑。"
-- "检查代码是否符合 @agents.md 的资源释放（Dispose）规范，防止显存泄漏。"
+## 完成标准
+
+在仓库根目录运行，三条都通过才算完成：
+
+```bash
+dotnet build
+dotnet test
+dotnet format --verify-no-changes
+```
+
+- 改了 `src/vid2sub.csproj`、运行时包或打包脚本，再跑 `./scripts/build-portable.sh osx-arm64` 和 `win-x64`：原生库的目录布局只有发布才能验证。
+- 改了音频解码或 Whisper 调用，用真实媒体文件跑一遍 CLI，单元测试覆盖不到这一段。没能验证的部分在汇报里写明。
+
+## 结构
+
+- 依赖只向内：`CLI → Application → Domain ← Infrastructure`，控制台输出只在 CLI。规则由 `tests/Vid2Sub.Tests/LayeringTests.cs` 强制执行，要改规则就改那份测试。
+- 接口只在有第二个实现或测试需要替身时才加。
+- 单元测试不访问网络，不加载真实 Whisper 模型或原生运行时。替身入口是 `IAudioProcessor`、`ISpeechRecognizer` 和 `WhisperModelProvider` 的 `download` 参数。
+
+## 不变量
+
+这三条没有测试守护，改相关代码时要保住。
+
+- **硬件加速交给 Autoprobe**。Whisper.net 从引用的 Runtime 包里按 `CUDA > Vulkan > CoreML > OpenVINO > CPU` 自动选择。Windows 保留 `Whisper.net.Runtime.Vulkan`，AMD 和 Intel 显卡的用户靠它加速。
+- **GPU 失败降级到 CPU**。`WhisperRecognizer` 在加速路径上遇到任何失败，都用 `UseGpu = false` 重试一次，并打印实际使用的运行时。
+- **音频在进程内解码**。`ManagedAudioProcessor` 用纯托管的 ManagedCodecs，不调用 FFmpeg 或任何外部进程；缺某种格式就加托管解码器。理由和放弃的格式见 `docs/adr/0001-in-process-audio-decoding.md`。
+
+Do not add any "Co-authored-by" trailers to git commit messages.
