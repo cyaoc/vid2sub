@@ -10,7 +10,7 @@ namespace Vid2Sub.Infrastructure.Speech;
 /// Whisper.net's autoprobe picks from the referenced runtime packages; this class never inspects
 /// the OS or GPU. The model loads on first use and stays loaded until disposal.
 /// </summary>
-public sealed class WhisperRecognizer(IModelProvider modelProvider, AppConfiguration config, Action<string> log) : ISpeechRecognizer
+public sealed class WhisperRecognizer(WhisperModelProvider modelProvider, AppConfiguration config, Action<string> log) : ISpeechRecognizer
 {
     private WhisperFactory? _factory;
     private bool _useGpu = true;
@@ -54,7 +54,8 @@ public sealed class WhisperRecognizer(IModelProvider modelProvider, AppConfigura
         var segments = new List<TranscriptionSegment>();
         await foreach (var result in processor.ProcessAsync(samples, cancellationToken))
         {
-            var segment = new TranscriptionSegment(result.Start, result.End, result.Text);
+            // With language "auto" this is what Whisper detected; the corrector picks its language rules by it.
+            var segment = new TranscriptionSegment(result.Start, result.End, result.Text, result.Language);
             segments.Add(segment);
             onSegment?.Invoke(segment);
         }

@@ -16,6 +16,9 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Vid2Sub.Tests" />
+    <!-- The same files ship beside the executable for users to edit; these copies are the fallback when one is deleted. -->
+    <!-- WithCulture=false: the build would take the ".ja" in correction-rules.ja.md for a culture and move the file into a satellite assembly. -->
+    <EmbeddedResource Include="../correction-rules*.md" LogicalName="%(Filename)%(Extension)" WithCulture="false" />
   </ItemGroup>
 
   <ItemGroup>
