@@ -32,7 +32,7 @@ public class LayeringTests
         Assert.Empty(offences);
     }
 
-    private static string RepositoryRoot()
+    internal static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "vid2sub.slnx")))

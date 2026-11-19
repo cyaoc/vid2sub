@@ -32,6 +32,11 @@ public static class YamlConfigLoader
 
         // Anchored to the executable so a portable build finds the models folder shipped beside it.
         config.Model.StorageDir = Path.GetFullPath(config.Model.StorageDir, AppContext.BaseDirectory);
+        if (!string.IsNullOrWhiteSpace(config.Correction.Glossary))
+        {
+            config.Correction.Glossary = Path.GetFullPath(config.Correction.Glossary, AppContext.BaseDirectory);
+        }
+
         return config;
     }
 
@@ -45,6 +50,7 @@ public static class YamlConfigLoader
             config.Model ??= new ModelConfig();
             config.Inference ??= new InferenceConfig();
             config.Output ??= new OutputConfig();
+            config.Correction ??= new CorrectionConfig();
             return config;
         }
         catch (YamlException ex)

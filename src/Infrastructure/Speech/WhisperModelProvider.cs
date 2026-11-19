@@ -1,5 +1,4 @@
 using Vid2Sub.Domain.Enums;
-using Vid2Sub.Domain.Interfaces;
 using Whisper.net.Ggml;
 
 namespace Vid2Sub.Infrastructure.Speech;
@@ -11,11 +10,12 @@ namespace Vid2Sub.Infrastructure.Speech;
 public sealed class WhisperModelProvider(
     string storageDir,
     IProgress<double>? downloadProgress = null,
-    Func<GgmlType, CancellationToken, Task<Stream>>? download = null) : IModelProvider
+    Func<GgmlType, CancellationToken, Task<Stream>>? download = null)
 {
     private readonly Func<GgmlType, CancellationToken, Task<Stream>> _download = download
         ?? ((type, cancellationToken) => WhisperGgmlDownloader.Default.GetGgmlModelAsync(type, cancellationToken: cancellationToken));
 
+    /// <summary>Returns the local path of the model file, downloading it first when it is missing.</summary>
     public async Task<string> EnsureModelAsync(ModelType modelType, CancellationToken cancellationToken = default)
     {
         var (ggmlType, fileName, approximateBytes) = Describe(modelType);

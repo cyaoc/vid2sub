@@ -15,7 +15,7 @@ NATIVE="${PLATFORM/osx/macos}" # Whisper.net names its macOS runtime folders mac
 
 rm -rf "$DIST"
 dotnet publish "$ROOT/src" -c Release -r "$PLATFORM" --self-contained -o "$DIST" -v quiet
-cp "$ROOT/config.yaml" "$DIST/"
+cp "$ROOT/config.yaml" "$ROOT"/correction-rules*.md "$DIST/"
 mkdir -p "$DIST/models"
 
 # Whisper.net ships native libraries for every platform; keep only the target's.

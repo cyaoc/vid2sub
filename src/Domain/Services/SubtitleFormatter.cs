@@ -47,6 +47,9 @@ public static class SubtitleFormatter
         return builder.ToString();
     }
 
+    /// <summary>A position in the recording as minutes and seconds, for what people read: console output and the list of corrections.</summary>
+    public static string Clock(TimeSpan time) => $"{(int)time.TotalMinutes:00}:{time.Seconds:00}";
+
     private static string Timestamp(TimeSpan time, char millisecondSeparator) =>
         $"{(int)time.TotalHours:00}:{time.Minutes:00}:{time.Seconds:00}{millisecondSeparator}{time.Milliseconds:000}";
 }
