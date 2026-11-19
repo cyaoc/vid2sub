@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    strategy:
+      matrix:
+        include:
+          # Built on macOS so the arm64 apphost gets its ad-hoc signature from the native toolchain.
+          - rid: osx-arm64
+            os: macos-latest
+          - rid: win-x64
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: ./scripts/build-portable.sh ${{ matrix.rid }}
+      - run: zip -qry vid2sub-${{ matrix.rid }}.zip vid2sub-${{ matrix.rid }}
+        working-directory: dist
+      - run: gh release upload "$TAG" dist/vid2sub-${{ matrix.rid }}.zip --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
