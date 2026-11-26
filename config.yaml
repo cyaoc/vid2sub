@@ -1,10 +1,11 @@
 # Vid2Sub configuration. Precedence: command-line arguments > this file > built-in defaults.
+# Write paths in single quotes, such as 'C:\Users\me\terms.xlsx': inside double quotes a backslash starts an escape.
 
 model:
   # Tiny, Base, Small, Medium, LargeV3, LargeV3Turbo
   type: "LargeV3Turbo"
   # Where models are downloaded and cached. A relative path is resolved from the executable's directory.
-  storage_dir: "./models"
+  storage_dir: './models'
 
 inference:
   # Language code such as "zh", "en", "ja", or "auto" to detect it
@@ -37,7 +38,7 @@ correction:
   effort: "medium"
   # Term list with the correct spellings: an .xlsx workbook, or a text file with one term per line.
   # A relative path is resolved from the executable's directory (from the current directory for --glossary).
-  # glossary: "./glossary.xlsx"
+  # glossary: './glossary.xlsx'
   # Header of the workbook column that holds the terms in the language of the subtitles; the other columns
   # (translations) are left out. Also -G / --glossary-column. Not needed when the workbook has one column.
   # glossary_column: "ja"

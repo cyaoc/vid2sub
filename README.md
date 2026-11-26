@@ -99,7 +99,7 @@ Without `--config`, the program reads `config.yaml` from the current working dir
 ```yaml
 model:
   type: "LargeV3Turbo"     # Tiny, Base, Small, Medium, LargeV3, LargeV3Turbo
-  storage_dir: "./models"  # relative paths are resolved from the application directory
+  storage_dir: './models'  # relative paths are resolved from the application directory
 
 inference:
   language: "auto"         # auto, zh, en, ja, ...
@@ -114,7 +114,7 @@ correction:
   enabled: false                 # true proofreads every run; --glossary turns it on for one run
   model: "claude-opus-5-5"       # passed to `claude --model`
   effort: "medium"               # low, medium, high, xhigh, max: higher is slower and uses more of the usage limit
-  glossary: "./glossary.xlsx"    # optional; relative paths are resolved from the application directory
+  glossary: './glossary.xlsx'    # optional; relative paths are resolved from the application directory
   glossary_column: "ja"          # header of the column with the terms; not needed for a single-column glossary
 ```
 

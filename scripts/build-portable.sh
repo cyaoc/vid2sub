@@ -29,5 +29,11 @@ done
 find "$DIST/runtimes" -type d -empty -delete
 rm -f "$DIST/ggml-metal.metal" # the Metal shader is already compiled into the dylib
 
+# Windows loads Whisper's native libraries from beside the exe; .NET SDK 11 dropped them without failing the publish.
+if [[ "$PLATFORM" == win-* && ! -f "$DIST/runtimes/$NATIVE/whisper.dll" ]]; then
+    echo "The publish left out the Whisper native libraries: $DIST/runtimes/$NATIVE/whisper.dll is missing" >&2
+    exit 1
+fi
+
 echo "Built $DIST"
 echo "Archive it with: (cd \"$ROOT/dist\" && zip -r vid2sub-$PLATFORM.zip vid2sub-$PLATFORM)"
